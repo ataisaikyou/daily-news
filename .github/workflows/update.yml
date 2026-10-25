@@ -1,11 +1,18 @@
 name: ニュース更新
+# Worker が「今すぐ更新」の進み具合を探すのに使うので、全ニュース更新のときは名前をそろえる
+run-name: ${{ (github.event_name == 'push' || inputs.full) && '全ニュース更新' || '定期更新' }}
 
 on:
+  # 5分ごとの起動は Cloudflare Worker（worker/）が workflow_dispatch で行う
+  # GitHub の定期実行は遅延・欠落が多いので、Worker が止まったとき用の予備として残す
   schedule:
-    # 5分ごと（GitHubの最短間隔）。速報・地震は毎回、その他ニュースは30分ごとに取得する
-    # 混雑時は数分〜数十分遅れたり、まれに飛ばされたりすることがある
-    - cron: '*/5 * * * *'
-  workflow_dispatch:    # Actions 画面の「Run workflow」で手動実行（全ニュースを取り直す）
+    - cron: '*/30 * * * *'
+  workflow_dispatch:    # Worker からの起動、または Actions 画面の「Run workflow」
+    inputs:
+      full:
+        description: '30分を待たずに全ニュースを取り直す'
+        type: boolean
+        default: true
   push:
     branches: [main]
 
@@ -36,8 +43,8 @@ jobs:
 
       - run: npm run build
         env:
-          # 定期実行以外（push・手動）は30分を待たずに全ニュースを取り直す
-          FORCE_FULL: ${{ github.event_name != 'schedule' && '1' || '' }}
+          # push と「全ニュース更新」の指定があるときは30分を待たずに全ニュースを取り直す
+          FORCE_FULL: ${{ (github.event_name == 'push' || inputs.full) && '1' || '' }}
 
       - uses: actions/configure-pages@v6
 
@@ -48,10 +55,10 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v5
 
-      # 公開リポジトリは60日間コミットがないと定期実行が自動で止まるため、
+      # 公開リポジトリは60日間コミットがないと定期実行（予備）が自動で止まるため、
       # 最終コミットから50日たったら空コミットして止まらないようにする
       - name: 定期実行の自動停止を防ぐ
-        if: github.event_name == 'schedule'
+        if: github.event_name != 'push'
         run: |
           days=$(( ($(date +%s) - $(git log -1 --format=%ct)) / 86400 ))
           echo "最終コミットから ${days} 日"

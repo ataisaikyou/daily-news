@@ -3,7 +3,7 @@
 // 前回の取得結果は公開サイトの state.json から読み戻して引き継ぐ
 import { XMLParser } from 'fast-xml-parser';
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { breaking, categories, NEWS_INTERVAL_MIN, quakeApi, SITE_URL } from '../feeds.mjs';
+import { breaking, categories, NEWS_INTERVAL_MIN, quakeApi, SITE_URL, TRIGGER_URL } from '../feeds.mjs';
 import { escapeHtml, formatJst, newsList, renderQuakes } from '../src/render.js';
 
 const ROOT = new URL('../', import.meta.url);
@@ -15,6 +15,8 @@ const SUMMARY_ITEMS = 5;  // 「まとめ」に出す件数
 const DAY = 86400e3;
 const JST_OFFSET = 9 * 3600e3;
 const FORCE_FULL = process.env.FORCE_FULL === '1';
+// 手元での動作確認用に環境変数で差し替えられるようにしておく
+const TRIGGER = process.env.TRIGGER_URL ?? TRIGGER_URL;
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -313,6 +315,8 @@ function page(cats, state, days, now) {
     <p class="date">${today}</p>
     <p class="updated">ニュース <time data-rel datetime="${iso(state.newsAt)}">${formatJst(state.newsAt)}</time> 更新（${NEWS_INTERVAL_MIN}分ごと）
       ・ 速報 <time data-rel data-breaking-at datetime="${iso(state.breaking.at)}">${formatJst(state.breaking.at)}</time> 更新（5分ごと）</p>
+    ${TRIGGER ? `<p class="refresh-row"><button type="button" class="refresh" data-refresh="${escapeHtml(TRIGGER)}">今すぐ更新</button>
+      <span class="refresh-msg" data-refresh-msg aria-live="polite"></span></p>` : ''}
   </div>
 </header>
 <nav class="tabs"><div class="wrap">${tabs}</div></nav>

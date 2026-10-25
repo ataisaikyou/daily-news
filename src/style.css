@@ -69,6 +69,23 @@ body {
 .site-header .date { margin: 2px 0 0; font-size: 1.05rem; font-weight: 600; }
 .site-header .updated { margin: 4px 0 0; color: var(--muted); font-size: .82rem; }
 
+.refresh-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 10px 0 0; }
+.refresh {
+  min-height: 40px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--c-domestic);
+  color: var(--on-cat);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.refresh:hover { filter: brightness(1.08); }
+.refresh:disabled { opacity: .55; cursor: wait; }
+.refresh-msg { color: var(--muted); font-size: .82rem; }
+
 /* ---- タブ ---- */
 .tabs {
   position: sticky;

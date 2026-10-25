@@ -4,6 +4,9 @@
 // 公開サイトのURL（前回のデータをここから読み戻して引き継ぐ）
 export const SITE_URL = 'https://ataisaikyou.github.io/daily-news/';
 
+// 「今すぐ更新」ボタンが呼び出す Cloudflare Worker のURL（worker/ をデプロイして得たURL。空ならボタンを出さない）
+export const TRIGGER_URL = 'https://daily-news-trigger.daily-news-trigger.workers.dev';
+
 // 速報以外のニュースを取り直す間隔（分）。速報と地震情報はワークフローが動くたび（5分ごと）に取得する
 export const NEWS_INTERVAL_MIN = 30;
 

@@ -82,6 +82,48 @@ async function refreshBreaking() {
 }
 setInterval(() => { if (!document.hidden) refreshBreaking(); }, BREAKING_INTERVAL);
 
+// ---- 「今すぐ更新」ボタン（Worker 経由で全ニュース更新を起動し、終わったら読み直す） ----
+const REFRESH_POLL = 5000;            // 進み具合を確認する間隔
+const REFRESH_TIMEOUT = 4 * 60 * 1000; // これ以上かかったら失敗扱い
+const refreshBtn = document.querySelector('[data-refresh]');
+const refreshMsg = document.querySelector('[data-refresh-msg]');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchJson(url, init) {
+  const res = await fetch(url, { cache: 'no-store', ...init });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function runRefresh() {
+  const base = refreshBtn.dataset.refresh.replace(/\/$/, '');
+  const say = (t) => { refreshMsg.textContent = t; };
+  refreshBtn.disabled = true;
+  try {
+    say('更新を依頼しています…');
+    const { since } = await fetchJson(`${base}/refresh`, { method: 'POST' });
+    const started = Date.now();
+    while (Date.now() - started < REFRESH_TIMEOUT) {
+      await sleep(REFRESH_POLL);
+      const st = await fetchJson(`${base}/status?since=${since}`);
+      if (st.state === 'completed') {
+        if (st.conclusion !== 'success') throw new Error(st.conclusion);
+        say('更新できました。読み直します…');
+        await sleep(3000);
+        // ?r= を付けて、キャッシュされた古いページではなく最新のページを読む
+        location.replace(`${location.pathname}?r=${Date.now()}${location.hash}`);
+        return;
+      }
+      say(`ニュースを取得中…（${Math.round((Date.now() - started) / 1000)}秒）`);
+    }
+    throw new Error('timeout');
+  } catch {
+    say('更新できませんでした。少し待ってからもう一度お試しください');
+    refreshBtn.disabled = false;
+  }
+}
+refreshBtn?.addEventListener('click', runRefresh);
+
 // ---- しばらく経ってからタブに戻ってきたら最新のページを読み直す ----
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && Date.now() - loadedAt > RELOAD_AFTER) location.reload();
