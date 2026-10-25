@@ -1,18 +1,26 @@
 name: ニュース更新
-# Worker が「今すぐ更新」の進み具合を探すのに使うので、全ニュース更新のときは名前をそろえる
-run-name: ${{ (github.event_name == 'push' || inputs.full) && '全ニュース更新' || '定期更新' }}
+# Worker が実行の種類（「今すぐ更新」の進み具合、5分更新を見送るか）を見分けるのに使う
+run-name: ${{ (github.event_name == 'push' || inputs.manual) && '手動更新' || inputs.full && '全ニュース更新' || github.event_name == 'schedule' && '予備の定期更新' || '速報更新' }}
 
 on:
-  # 5分ごとの起動は Cloudflare Worker（worker/）が workflow_dispatch で行う
+  # 5分の倍数の時刻の起動は Cloudflare Worker（worker/）が workflow_dispatch で行う
   # GitHub の定期実行は遅延・欠落が多いので、Worker が止まったとき用の予備として残す
   schedule:
     - cron: '*/30 * * * *'
   workflow_dispatch:    # Worker からの起動、または Actions 画面の「Run workflow」
     inputs:
       full:
-        description: '30分を待たずに全ニュースを取り直す'
+        description: '全ニュースを取り直す'
         type: boolean
         default: true
+      manual:
+        description: '「今すぐ更新」ボタンからの手動更新'
+        type: boolean
+        default: false
+      at:
+        description: '定期更新の予定時刻（ミリ秒。更新時刻として記録する）'
+        type: string
+        default: ''
   push:
     branches: [main]
 
@@ -41,18 +49,25 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build
+      - id: build
+        run: npm run build
         env:
-          # push と「全ニュース更新」の指定があるときは30分を待たずに全ニュースを取り直す
-          FORCE_FULL: ${{ (github.event_name == 'push' || inputs.full) && '1' || '' }}
+          # push・手動更新・全ニュース更新のときは全ニュースを取り直す
+          FORCE_FULL: ${{ (github.event_name == 'push' || inputs.manual || inputs.full) && '1' || '' }}
+          UPDATE_AT: ${{ inputs.at }}
+          # 予備の定期実行は、Worker からの更新が動いていれば何もしない（skip=true を出力する）
+          BACKUP: ${{ github.event_name == 'schedule' && '1' || '' }}
 
-      - uses: actions/configure-pages@v6
+      - if: steps.build.outputs.skip != 'true'
+        uses: actions/configure-pages@v6
 
-      - uses: actions/upload-pages-artifact@v5
+      - if: steps.build.outputs.skip != 'true'
+        uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
       - id: deployment
+        if: steps.build.outputs.skip != 'true'
         uses: actions/deploy-pages@v5
 
       # 公開リポジトリは60日間コミットがないと定期実行（予備）が自動で止まるため、

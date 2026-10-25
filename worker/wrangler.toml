@@ -10,6 +10,8 @@ crons = ["*/5 * * * *"]
 REPO = "ataisaikyou/daily-news"
 WORKFLOW = "update.yml"
 GITHUB_API = "https://api.github.com"
+# 全ニュースを取り直す間隔（分）。この倍数の時刻（毎時0分・30分）に取り直す
+FULL_EVERY_MIN = "30"
 # 「今すぐ更新」ボタンを置くサイト（カンマ区切りで複数可）
 ALLOWED_ORIGINS = "https://ataisaikyou.github.io"
 

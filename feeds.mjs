@@ -7,7 +7,8 @@ export const SITE_URL = 'https://ataisaikyou.github.io/daily-news/';
 // 「今すぐ更新」ボタンが呼び出す Cloudflare Worker のURL（worker/ をデプロイして得たURL。空ならボタンを出さない）
 export const TRIGGER_URL = 'https://daily-news-trigger.daily-news-trigger.workers.dev';
 
-// 速報以外のニュースを取り直す間隔（分）。速報と地震情報はワークフローが動くたび（5分ごと）に取得する
+// 速報以外のニュースを取り直す間隔（分）。画面の表示と、Worker が止まったときの予備の定期実行で使う
+// （取り直す時刻は worker/wrangler.toml の FULL_EVERY_MIN の倍数。速報と地震情報は5分の倍数の時刻ごとに取得する）
 export const NEWS_INTERVAL_MIN = 30;
 
 // Googleニュースのキーワード検索RSSのURLを作る

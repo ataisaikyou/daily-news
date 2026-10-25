@@ -1,8 +1,8 @@
 // RSSと地震情報を取得して dist/ に静的サイトを生成する
-// 5分ごとに実行される想定：速報・地震は毎回、その他のニュースは NEWS_INTERVAL_MIN ごとに取り直す
+// 5分の倍数の時刻に実行される想定：速報・地震は毎回、その他のニュースは毎時0分・30分と手動更新のときに取り直す
 // 前回の取得結果は公開サイトの state.json から読み戻して引き継ぐ
 import { XMLParser } from 'fast-xml-parser';
-import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { breaking, categories, NEWS_INTERVAL_MIN, quakeApi, SITE_URL, TRIGGER_URL } from '../feeds.mjs';
 import { escapeHtml, formatJst, newsList, renderQuakes } from '../src/render.js';
 
@@ -14,6 +14,11 @@ const MAX_ITEMS = 40;     // カテゴリごとの最大件数
 const DAY = 86400e3;
 const JST_OFFSET = 9 * 3600e3;
 const FORCE_FULL = process.env.FORCE_FULL === '1';
+// Worker からの定期更新では予定時刻（5分の倍数）を更新時刻として記録する
+const UPDATE_AT = Number(process.env.UPDATE_AT) || 0;
+// GitHub の定期実行（予備）。Worker からの更新がこの時間以内にあれば何もしない
+const BACKUP = process.env.BACKUP === '1';
+const BACKUP_IDLE = 15 * 60e3;
 // 手元での動作確認用に環境変数で差し替えられるようにしておく
 const TRIGGER = process.env.TRIGGER_URL ?? TRIGGER_URL;
 
@@ -316,9 +321,17 @@ function page(cats, state, days, now) {
 
 const now = Date.now();
 const prev = await loadPrevState(now);
+if (BACKUP && prev?.breaking?.at && now - prev.breaking.at < BACKUP_IDLE) {
+  console.log('Worker からの定期更新が動いているので、予備の定期実行では更新しません');
+  if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, 'skip=true\n');
+  process.exit(0);
+}
+const updatedAt = UPDATE_AT && UPDATE_AT <= now ? UPDATE_AT : now;
 const prevCats = new Map((prev?.categories ?? []).map((c) => [c.id, c.items]));
+// 全ニュースの取り直しは、通常は Worker が毎時0分・30分に指定する（FORCE_FULL）。
+// 予備の定期実行のときは前回から NEWS_INTERVAL_MIN 分ほどたっていれば取り直す
 const fullDue = FORCE_FULL || !prev?.newsAt
-  || now - prev.newsAt >= (NEWS_INTERVAL_MIN - 2) * 60e3
+  || (BACKUP && now - prev.newsAt >= (NEWS_INTERVAL_MIN - 2) * 60e3)
   || categories.some((c) => !prevCats.has(c.id));
 
 console.log(fullDue ? '全ニュースを取得中...' : '速報と地震情報を取得中...');
@@ -334,9 +347,9 @@ const major = uniqueSorted([...(fresh?.major ?? []), ...(prev?.major ?? [])])
   .filter((it) => it.time && it.time >= yesterdayStart && it.time <= now + 600e3);
 
 const state = {
-  newsAt: fullDue ? now : prev.newsAt,
+  newsAt: fullDue ? updatedAt : prev.newsAt,
   categories: fresh?.categories ?? categories.map((c) => ({ id: c.id, items: prevCats.get(c.id) })),
-  breaking: { at: now, items: breakingItems },
+  breaking: { at: updatedAt, items: breakingItems },
   quakes,
   major,
 };

@@ -1,10 +1,15 @@
 // GitHub Actions の「ニュース更新」を確実に動かすための Cloudflare Worker
-// - 5分ごと（Cron Trigger）にワークフローを起動する（GitHub の定期実行は遅延・欠落が多いため）
-// - サイトの「今すぐ更新」ボタンから POST /refresh で全ニュースの取り直しを起動する
-// - GET /status?since=ミリ秒 で、その時刻以降に起動した全ニュース更新の進み具合を返す
+// - 5分の倍数の時刻（Cron Trigger）にワークフローを起動する（GitHub の定期実行は遅延・欠落が多いため）
+//   毎時0分・30分は全ニュース、それ以外は速報と地震情報だけを取り直す
+// - サイトの「今すぐ更新」ボタンから POST /refresh で全ニュースの取り直し（手動更新）を起動する
+// - GET /status?since=ミリ秒 で、その時刻以降に起動した手動更新の進み具合を返す
 
-const FULL_TITLE = '全ニュース更新'; // ワークフローの run-name と合わせる
-const ACTIVE = new Set(['requested', 'queued', 'pending', 'waiting', 'in_progress']);
+// ワークフローの run-name と合わせる
+const MANUAL_TITLE = '手動更新';
+const BREAKING_TITLE = '速報更新';
+const WAITING = new Set(['requested', 'queued', 'pending', 'waiting']);
+const ACTIVE = new Set([...WAITING, 'in_progress']);
+const MANUAL_SKIP_MS = 4 * 60e3; // 手動更新からこの時間以内の5分更新は見送る
 
 async function github(env, path, init = {}) {
   const res = await fetch(`${env.GITHUB_API}/repos/${env.REPO}${path}`, {
@@ -21,11 +26,11 @@ async function github(env, path, init = {}) {
   return res.status === 204 ? null : res.json();
 }
 
-// full: true なら30分を待たずに全ニュースを取り直す
-function dispatch(env, full) {
+// full: 全ニュースを取り直す / manual: 手動更新 / at: 定期更新の予定時刻（更新時刻として記録する）
+function dispatch(env, { full, manual = false, at = '' }) {
   return github(env, `/actions/workflows/${env.WORKFLOW}/dispatches`, {
     method: 'POST',
-    body: JSON.stringify({ ref: 'main', inputs: { full: String(full) } }),
+    body: JSON.stringify({ ref: 'main', inputs: { full: String(full), manual: String(manual), at: String(at) } }),
   });
 }
 
@@ -55,18 +60,18 @@ function json(body, status, cors) {
 }
 
 async function handleRefresh(env) {
-  // すでに全ニュース更新が動いている（待機中を含む）なら重ねて起動しない
+  // すでに手動更新が動いている（待機中を含む）なら重ねて起動しない
   const runs = await recentRuns(env);
-  const running = runs.find((r) => r.title === FULL_TITLE && ACTIVE.has(r.status));
+  const running = runs.find((r) => r.title === MANUAL_TITLE && ACTIVE.has(r.status));
   if (running) return { state: 'running', since: running.createdAt };
   const since = Date.now();
-  await dispatch(env, true);
+  await dispatch(env, { full: true, manual: true });
   return { state: 'started', since };
 }
 
 async function handleStatus(env, since) {
   // 起動直後は一覧に出るまで数秒かかるので、少し前からの実行も対象にする
-  const run = (await recentRuns(env)).find((r) => r.title === FULL_TITLE && r.createdAt >= since - 15000);
+  const run = (await recentRuns(env)).find((r) => r.title === MANUAL_TITLE && r.createdAt >= since - 15000);
   if (!run) return { state: 'waiting' };
   return { state: run.status, conclusion: run.conclusion };
 }
@@ -74,10 +79,16 @@ async function handleStatus(env, since) {
 export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
-      // 実行中・待機中のものがあれば今回は見送る
-      // （重ねて起動すると、待機中の「全ニュース更新」が後から来た定期更新に置き換えられてしまう）
-      if ((await recentRuns(env)).some((r) => ACTIVE.has(r.status))) return;
-      await dispatch(env, false);
+      // 予定時刻を5分の倍数にそろえる（念のため。秒がずれていても0分・30分の判定を誤らない）
+      const at = Math.round(controller.scheduledTime / 300e3) * 300e3;
+      const full = (at / 60e3) % Number(env.FULL_EVERY_MIN) === 0;
+      const runs = await recentRuns(env);
+      // 待機中の実行があるときは見送る（後から起動すると、待機中のものが置き換えられてしまうため）。
+      // ただし待機中が速報更新で、今回が全ニュース更新なら置き換えてよい
+      if (runs.some((r) => WAITING.has(r.status) && (r.title !== BREAKING_TITLE || !full))) return;
+      // 5分更新は、直前4分以内に手動更新があれば見送る
+      if (!full && runs.some((r) => r.title === MANUAL_TITLE && at - r.createdAt <= MANUAL_SKIP_MS)) return;
+      await dispatch(env, { full, at });
     })());
   },
 
