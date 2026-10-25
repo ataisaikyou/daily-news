@@ -1,0 +1,12 @@
+{
+  "name": "daily-news",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/preview.mjs"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.11.2"
+  }
+}
