@@ -1,8 +1,9 @@
-// ブラウザ側の処理：タブ切り替え・相対時刻・地震情報のライブ更新
-import { formatJst, renderQuakes } from './render.js';
+// ブラウザ側の処理：タブ切り替え・相対時刻・速報と地震情報のライブ更新
+import { formatJst, newsList, renderQuakes } from './render.js';
 
 const QUAKE_API = 'https://api.p2pquake.net/v2/history?codes=551&limit=40';
-const QUAKE_INTERVAL = 2 * 60 * 1000; // 地震情報の再取得間隔
+const QUAKE_INTERVAL = 2 * 60 * 1000;    // 地震情報の再取得間隔
+const BREAKING_INTERVAL = 60 * 1000;     // 速報データの確認間隔（更新されていれば差し替える）
 const RELOAD_AFTER = 30 * 60 * 1000;  // 開きっぱなしの時、戻ってきたら再読み込みする時間
 const loadedAt = Date.now();
 
@@ -61,6 +62,25 @@ async function refreshQuakes() {
 }
 refreshQuakes();
 setInterval(() => { if (!document.hidden) refreshQuakes(); }, QUAKE_INTERVAL);
+
+// ---- 速報のライブ更新（サイト側の breaking.json は5分ごとに作り直される） ----
+async function refreshBreaking() {
+  try {
+    const res = await fetch(`breaking.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const atEl = document.querySelector('[data-breaking-at]');
+    if (atEl && Date.parse(atEl.getAttribute('datetime')) >= data.at) return; // 変化なし
+    document.querySelectorAll('[data-breaking]').forEach((el) => {
+      el.innerHTML = newsList(data.items.slice(0, Number(el.dataset.breaking)));
+    });
+    atEl?.setAttribute('datetime', new Date(data.at).toISOString());
+    updateRelativeTimes();
+  } catch {
+    // 取得できなければ表示中の内容のまま
+  }
+}
+setInterval(() => { if (!document.hidden) refreshBreaking(); }, BREAKING_INTERVAL);
 
 // ---- しばらく経ってからタブに戻ってきたら最新のページを読み直す ----
 document.addEventListener('visibilitychange', () => {

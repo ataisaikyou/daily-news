@@ -12,6 +12,9 @@
   --c-tech: #7c3aed;
   --c-game: #d0306f;
   --c-disaster: #d92d20;
+  --c-breaking: #e5484d;
+  --c-daily: #b7791f;
+  --c-x: #1b1e24;
   color-scheme: light;
 }
 
@@ -30,6 +33,9 @@
     --c-tech: #b49cff;
     --c-game: #ff7eb0;
     --c-disaster: #ff7a6e;
+    --c-breaking: #ff6b70;
+    --c-daily: #f0b453;
+    --c-x: #e8eaef;
     color-scheme: dark;
   }
 }
@@ -40,6 +46,9 @@
 .cat-tech     { --cat: var(--c-tech); }
 .cat-game     { --cat: var(--c-game); }
 .cat-disaster { --cat: var(--c-disaster); }
+.cat-breaking { --cat: var(--c-breaking); }
+.cat-daily    { --cat: var(--c-daily); }
+.cat-x        { --cat: var(--c-x); }
 
 * { box-sizing: border-box; }
 
@@ -110,7 +119,8 @@ main { padding-top: 20px; padding-bottom: 24px; }
   gap: 16px;
   align-items: start;
 }
-@media (max-width: 760px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.split.even { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 760px) { .split, .split.even { grid-template-columns: minmax(0, 1fr); } }
 
 .card {
   background: var(--surface);
@@ -127,7 +137,22 @@ main { padding-top: 20px; padding-bottom: 24px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cat); flex: none; }
 .more { color: var(--cat); font-size: .82rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .more:hover { text-decoration: underline; }
-.count, .live { color: var(--muted); font-size: .78rem; }
+.count, .live { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+.head-links { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.x-link { color: var(--text); font-size: .78rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.x-link:hover { text-decoration: underline; }
+.note { color: var(--muted); font-size: .8rem; margin: 4px 0 12px; }
+.flash-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--c-breaking);
+  color: var(--on-cat);
+  font-size: .7rem;
+  font-weight: 700;
+  vertical-align: 2px;
+}
 .sub { margin: 12px 0 2px; font-size: .8rem; color: var(--muted); font-weight: 600; }
 
 /* ---- ニュース一覧 ---- */
@@ -187,7 +212,7 @@ main { padding-top: 20px; padding-bottom: 24px; }
   color: var(--text);
   text-decoration: none;
 }
-.links a:hover { border-color: var(--c-disaster); }
+.links a:hover { border-color: var(--cat, var(--c-disaster)); }
 
 footer { padding-bottom: 32px; color: var(--muted); font-size: .76rem; }
 footer p { margin: 4px 0; }

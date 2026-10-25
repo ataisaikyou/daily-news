@@ -14,6 +14,21 @@ export function formatJst(ms) {
   return jstFormat.format(new Date(ms));
 }
 
+// ニュース一覧。abs: true のときは「○分前」に変えず日時のまま出す
+export function newsList(items, { abs = false } = {}) {
+  if (!items?.length) return '<p class="empty">該当する記事はまだありません</p>';
+  return `<ul class="news-list">${items.map((it) => {
+    const time = it.time
+      ? ` ・ <time${abs ? '' : ' data-rel'} datetime="${new Date(it.time).toISOString()}">${formatJst(it.time)}</time>`
+      : '';
+    const flash = it.title.includes('速報') ? '<span class="flash-tag">速報</span>' : '';
+    return `
+  <li>${flash}<a href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${escapeHtml(it.title)}</a>
+    <span class="meta">${escapeHtml(it.source)}${time}</span></li>`;
+  }).join('')}
+</ul>`;
+}
+
 // P2P地震情報の maxScale → 震度表記
 const SCALE = { 10: '1', 20: '2', 30: '3', 40: '4', 45: '5弱', 50: '5強', 55: '6弱', 60: '6強', 70: '7' };
 const TSUNAMI = {

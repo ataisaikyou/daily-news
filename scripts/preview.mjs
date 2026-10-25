@@ -5,7 +5,7 @@ import { extname } from 'node:path';
 
 const DIST = new URL('../dist/', import.meta.url);
 const PORT = Number(process.env.PORT) || 8080;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json' };
 
 createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html';

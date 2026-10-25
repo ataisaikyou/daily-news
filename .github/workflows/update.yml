@@ -2,8 +2,10 @@ name: ニュース更新
 
 on:
   schedule:
-    - cron: '7 * * * *' # 毎時7分（UTC基準。混雑時は数分〜数十分遅れることがある）
-  workflow_dispatch:    # Actions 画面の「Run workflow」で手動実行
+    # 5分ごと（GitHubの最短間隔）。速報・地震は毎回、その他ニュースは30分ごとに取得する
+    # 混雑時は数分〜数十分遅れたり、まれに飛ばされたりすることがある
+    - cron: '*/5 * * * *'
+  workflow_dispatch:    # Actions 画面の「Run workflow」で手動実行（全ニュースを取り直す）
   push:
     branches: [main]
 
@@ -33,6 +35,9 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+        env:
+          # 定期実行以外（push・手動）は30分を待たずに全ニュースを取り直す
+          FORCE_FULL: ${{ github.event_name != 'schedule' && '1' || '' }}
 
       - uses: actions/configure-pages@v6
 
