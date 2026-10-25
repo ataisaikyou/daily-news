@@ -11,7 +11,6 @@ const DIST = new URL('dist/', ROOT);
 const UA = 'Mozilla/5.0 (compatible; daily-news/1.0; +https://github.com/ataisaikyou/daily-news)';
 const MAX_AGE_HOURS = 48; // これより古い記事は出さない
 const MAX_ITEMS = 40;     // カテゴリごとの最大件数
-const SUMMARY_ITEMS = 5;  // 「まとめ」に出す件数
 const DAY = 86400e3;
 const JST_OFFSET = 9 * 3600e3;
 const FORCE_FULL = process.env.FORCE_FULL === '1';
@@ -174,116 +173,86 @@ async function loadQuakes(prev) {
 // ---- HTML 生成 ----
 
 const xUrl = (q) => `https://x.com/search?q=${encodeURIComponent(q)}&f=live`;
-const xLink = (q) =>
-  `<a class="x-link" href="${escapeHtml(xUrl(q))}" target="_blank" rel="noopener">Xで検索 ↗</a>`;
+const xLink = (q, label = 'Xで検索') =>
+  `<a class="x-link" href="${escapeHtml(xUrl(q))}" target="_blank" rel="noopener">${escapeHtml(label)} ↗</a>`;
 
-function cardHead(id, label, extra = '') {
-  return `<div class="card-head">
-  <h2><span class="dot"></span>${escapeHtml(label)}</h2>
-  <span class="head-links">${extra}<a class="more" href="#${id}">すべて見る →</a></span>
-</div>`;
+// 先頭 n 件だけ見せて、残りは「もっと見る」で開く一覧
+function clipList(html, n, attrs = '') {
+  return `<div class="clip clip-${n}"${attrs}>${html}</div>
+<button type="button" class="more-btn" data-more>もっと見る</button>`;
 }
 
 const JMA_LINKS = `<p class="links">
-  <a href="https://www.jma.go.jp/bosai/warning/" target="_blank" rel="noopener">気象庁 警報・注意報</a>
-  <a href="https://www.jma.go.jp/bosai/map.html#contents=earthquake_map" target="_blank" rel="noopener">気象庁 地震情報</a>
-  <a href="https://www.jma.go.jp/bosai/map.html#contents=tsunami" target="_blank" rel="noopener">気象庁 津波情報</a>
+  <a href="https://www.jma.go.jp/bosai/warning/" target="_blank" rel="noopener">警報・注意報</a>
+  <a href="https://www.jma.go.jp/bosai/map.html#contents=earthquake_map" target="_blank" rel="noopener">地震情報</a>
+  <a href="https://www.jma.go.jp/bosai/map.html#contents=tsunami" target="_blank" rel="noopener">津波情報</a>
+  <a href="https://www.jma.go.jp/bosai/nowc/" target="_blank" rel="noopener">雨雲レーダー</a>
 </p>`;
 
-function xCard() {
+// ---- 左：速報 ----
+function breakingBox(state) {
+  return `<section class="box box-breaking">
+  <h2 class="box-title">速報<span class="live" data-breaking-status>5分ごと更新</span></h2>
+  ${clipList(newsList(state.breaking.items), 10, ` data-breaking="${breaking.maxItems}"`)}
+  <p class="box-foot">${xLink(breaking.x, 'Xで「速報」を検索')}</p>
+</section>`;
+}
+
+// ---- 中央：ジャンル別のタブ ----
+function topicPanel(cat) {
+  return `<div class="panel" data-panel="${cat.id}">
+  ${clipList(newsList(cat.items), 10)}
+  <p class="box-foot"><span class="count">${cat.items.length}件</span>${xLink(cat.x, `Xで「${cat.name}」を検索`)}</p>
+</div>`;
+}
+
+function dailyPanel(days, now) {
+  const yLabel = formatJst(jstDayStart(now) - DAY).split(' ')[0];
+  return `<div class="panel" data-panel="daily">
+  <p class="note">NHK・Yahoo!ニュースの「主要」に載ったニュースを日付ごとに集めています</p>
+  <h3 class="sub">今日（0時〜現在）<span class="count">${days.today.length}件</span></h3>
+  ${clipList(newsList(days.today, { abs: true }), 10)}
+  <h3 class="sub">昨日（${yLabel}）<span class="count">${days.yesterday.length}件</span></h3>
+  ${clipList(newsList(days.yesterday, { abs: true }), 10)}
+</div>`;
+}
+
+function topicsBox(cats, days, state, now) {
+  const tabs = [...cats.map((c) => ({ id: c.id, name: c.short ?? c.name })), { id: 'daily', name: '今日・昨日' }];
+  return `<section class="box topics" id="topics">
+  <nav class="topic-tabs">${tabs.map((t) =>
+    `<a href="#${t.id}" data-tab="${t.id}">${escapeHtml(t.name)}</a>`).join('')}</nav>
+  <p class="topics-meta">${formatJst(state.newsAt)} 更新</p>
+  ${cats.map(topicPanel).join('\n')}
+  ${dailyPanel(days, now)}
+</section>`;
+}
+
+// ---- 右：X と 災害 ----
+function xBox() {
   const links = [
     { label: 'トレンド', url: 'https://x.com/explore/tabs/trending' },
     { label: 'ニュース', url: 'https://x.com/explore/tabs/news' },
     { label: '速報', url: xUrl(breaking.x) },
     ...categories.map((c) => ({ label: c.name, url: xUrl(c.x) })),
   ];
-  return `<article class="card cat-x">
-  <div class="card-head"><h2><span class="dot"></span>X（リアルタイム検索）</h2></div>
-  <p class="note">押すとXの最新の投稿を開きます（Xへのログインが必要な場合があります）</p>
-  <p class="links">${links.map((l) =>
-    `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.label)}</a>`).join('')}</p>
-</article>`;
-}
-
-function summaryPanel(cats, state, days) {
-  const cards = cats.map((cat) => {
-    if (cat.id === 'disaster') {
-      return `<article class="card cat-${cat.id}">
-${cardHead(cat.id, cat.name)}
-<h3 class="sub">最近の地震</h3>
-<div data-quakes="3">${renderQuakes(state.quakes, 3)}</div>
-<h3 class="sub">災害関連ニュース</h3>
-${newsList(cat.items.slice(0, 3))}
-</article>`;
-    }
-    return `<article class="card cat-${cat.id}">
-${cardHead(cat.id, cat.name)}
-${newsList(cat.items.slice(0, SUMMARY_ITEMS))}
-</article>`;
-  });
-  return `<section class="panel" data-panel="summary"><div class="cards">
-<article class="card cat-breaking">
-${cardHead('breaking', '速報', '<span class="live" data-breaking-status>5分ごと更新</span>')}
-<div data-breaking="${SUMMARY_ITEMS}">${newsList(state.breaking.items.slice(0, SUMMARY_ITEMS))}</div>
-</article>
-<article class="card cat-daily">
-${cardHead('daily', '今日の主なニュース')}
-${newsList(days.today.slice(0, SUMMARY_ITEMS), { abs: true })}
-</article>
-${cards.join('\n')}
-${xCard()}
-</div></section>`;
-}
-
-function breakingPanel(state) {
-  return `<section class="panel cat-breaking" data-panel="breaking">
-<article class="card wide">
-  <div class="card-head"><h2><span class="dot"></span>速報（直近${breaking.hours}時間）</h2>
-    <span class="head-links"><span class="live" data-breaking-status>5分ごと更新</span>${xLink(breaking.x)}</span></div>
-  <div data-breaking="${breaking.maxItems}">${newsList(state.breaking.items)}</div>
-</article>
+  return `<section class="box box-x">
+  <h2 class="box-title">X（リアルタイム検索）</h2>
+  <ol class="rank">${links.map((l, i) =>
+    `<li><span class="rank-no">${i + 1}</span><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.label)}</a></li>`).join('')}</ol>
+  <p class="note">Xの最新の投稿を開きます（ログインが必要な場合があります）</p>
 </section>`;
 }
 
-function dailyPanel(days, now) {
-  const yLabel = formatJst(jstDayStart(now) - DAY).split(' ')[0];
-  return `<section class="panel cat-daily" data-panel="daily">
-<p class="note">NHK・Yahoo!ニュースの「主要」に載ったニュースを日付ごとに集めています</p>
-<div class="split even">
-  <article class="card">
-    <div class="card-head"><h2><span class="dot"></span>今日（0時〜現在）の主なニュース</h2><span class="count">${days.today.length}件</span></div>
-    ${newsList(days.today, { abs: true })}
-  </article>
-  <article class="card">
-    <div class="card-head"><h2><span class="dot"></span>昨日（${yLabel}）の主なニュース</h2><span class="count">${days.yesterday.length}件</span></div>
-    ${newsList(days.yesterday, { abs: true })}
-  </article>
-</div>
-</section>`;
-}
-
-function categoryPanel(cat, state) {
-  if (cat.id === 'disaster') {
-    return `<section class="panel cat-${cat.id}" data-panel="${cat.id}">
-<div class="split">
-  <article class="card">
-    <div class="card-head"><h2><span class="dot"></span>最近の地震</h2><span class="live" data-quake-status>自動更新</span></div>
-    <div data-quakes="10">${renderQuakes(state.quakes, 10)}</div>
-    ${JMA_LINKS}
-  </article>
-  <article class="card">
-    <div class="card-head"><h2><span class="dot"></span>災害関連ニュース</h2><span class="head-links">${xLink(cat.x)}</span></div>
-    ${newsList(cat.items)}
-  </article>
-</div>
-</section>`;
-  }
-  return `<section class="panel cat-${cat.id}" data-panel="${cat.id}">
-<article class="card wide">
-  <div class="card-head"><h2><span class="dot"></span>${escapeHtml(cat.name)}</h2>
-    <span class="head-links"><span class="count">${cat.items.length}件</span>${xLink(cat.x)}</span></div>
-  ${newsList(cat.items)}
-</article>
+function disasterBox(cat, state) {
+  return `<section class="box box-disaster">
+  <h2 class="box-title">災害<span class="live" data-quake-status>自動更新</span></h2>
+  <h3 class="sub">最近の地震</h3>
+  <div data-quakes="5">${renderQuakes(state.quakes, 5)}</div>
+  ${JMA_LINKS}
+  <h3 class="sub">災害関連ニュース</h3>
+  ${newsList(cat.items.slice(0, 5))}
+  <p class="box-foot"><a class="more-link" href="#${cat.id}">もっと見る</a>${xLink(cat.x)}</p>
 </section>`;
 }
 
@@ -294,9 +263,6 @@ function page(cats, state, days, now) {
   const sources = [...new Set([...breaking.feeds, ...cats.flatMap((c) => c.feeds)].map((f) => f.name))];
   const icon = encodeURIComponent(
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📰</text></svg>");
-  const tabs = [{ id: 'summary', name: 'まとめ' }, { id: 'breaking', name: '速報' }, { id: 'daily', name: '今日・昨日' }, ...cats]
-    .map((t) => `<a class="tab cat-${t.id}" href="#${t.id === 'summary' ? '' : t.id}" data-tab="${t.id}">${escapeHtml(t.name)}</a>`)
-    .join('');
   const iso = (ms) => new Date(ms).toISOString();
   return `<!doctype html>
 <html lang="ja">
@@ -309,23 +275,26 @@ function page(cats, state, days, now) {
 <link rel="stylesheet" href="style.css?v=${now}">
 </head>
 <body>
-<header class="site-header">
-  <div class="wrap">
-    <h1>今日のニュース</h1>
-    <p class="date">${today}</p>
-    <p class="updated">ニュース <time data-rel datetime="${iso(state.newsAt)}">${formatJst(state.newsAt)}</time> 更新（${NEWS_INTERVAL_MIN}分ごと）
-      ・ 速報 <time data-rel data-breaking-at datetime="${iso(state.breaking.at)}">${formatJst(state.breaking.at)}</time> 更新（5分ごと）</p>
-    ${TRIGGER ? `<p class="refresh-row"><button type="button" class="refresh" data-refresh="${escapeHtml(TRIGGER)}">今すぐ更新</button>
-      <span class="refresh-msg" data-refresh-msg aria-live="polite"></span></p>` : ''}
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <h1 class="brand">今日のニュース</h1>
+    <div class="top-meta">
+      <p class="date">${today}</p>
+      <p class="updated">ニュース <time data-rel datetime="${iso(state.newsAt)}">${formatJst(state.newsAt)}</time> 更新（${NEWS_INTERVAL_MIN}分ごと）
+        ・ 速報 <time data-rel data-breaking-at datetime="${iso(state.breaking.at)}">${formatJst(state.breaking.at)}</time> 更新（5分ごと）</p>
+    </div>
+    ${TRIGGER ? `<div class="refresh-box"><button type="button" class="refresh" data-refresh="${escapeHtml(TRIGGER)}">今すぐ更新</button>
+      <span class="refresh-msg" data-refresh-msg aria-live="polite"></span></div>` : ''}
   </div>
 </header>
-<nav class="tabs"><div class="wrap">${tabs}</div></nav>
-<main class="wrap">
-${summaryPanel(cats, state, days)}
-${breakingPanel(state)}
-${dailyPanel(days, now)}
-${cats.map((c) => categoryPanel(c, state)).join('\n')}
-</main>
+<div class="wrap layout">
+  <aside class="col-left">${breakingBox(state)}</aside>
+  <main class="col-main">${topicsBox(cats, days, state, now)}</main>
+  <aside class="col-right">
+    ${xBox()}
+    ${disasterBox(cats.find((c) => c.id === 'disaster'), state)}
+  </aside>
+</div>
 <footer class="wrap">
   <p>見出しは各配信元のRSSから自動取得しています。記事の著作権は各配信元に帰属します。</p>
   <p>出典：${sources.map(escapeHtml).join(' / ')} ／ 地震情報：P2P地震情報（気象庁発表）</p>

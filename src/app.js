@@ -1,4 +1,4 @@
-// ブラウザ側の処理：タブ切り替え・相対時刻・速報と地震情報のライブ更新
+// ブラウザ側の処理：タブ切り替え・もっと見る・相対時刻・速報と地震情報のライブ更新・今すぐ更新
 import { formatJst, newsList, renderQuakes } from './render.js';
 
 const QUAKE_API = 'https://api.p2pquake.net/v2/history?codes=551&limit=40';
@@ -9,16 +9,18 @@ const loadedAt = Date.now();
 
 document.documentElement.classList.add('js');
 
-// ---- タブ切り替え（URLの #domestic などで表示するカテゴリを決める） ----
+// ---- 中央のタブ切り替え（URLの #world などで表示するジャンルを決める。初期は「主要」） ----
+const DEFAULT_TAB = 'domestic';
 function showPanel() {
-  const want = location.hash.slice(1) || 'summary';
-  const id = document.querySelector(`[data-panel="${CSS.escape(want)}"]`) ? want : 'summary';
+  const want = location.hash.slice(1) || DEFAULT_TAB;
+  const id = document.querySelector(`[data-panel="${CSS.escape(want)}"]`) ? want : DEFAULT_TAB;
   document.querySelectorAll('[data-panel]').forEach((p) => p.classList.toggle('active', p.dataset.panel === id));
   document.querySelectorAll('[data-tab]').forEach((t) => {
     if (t.dataset.tab === id) {
       t.setAttribute('aria-current', 'page');
-      // スマホで選択中のタブが画面外に隠れないようにする
-      t.scrollIntoView({ block: 'nearest', inline: 'center' });
+      // スマホで選択中のタブがタブ列の外に隠れないよう、横方向だけ寄せる
+      const bar = t.parentElement;
+      bar.scrollLeft = t.offsetLeft - (bar.clientWidth - t.offsetWidth) / 2;
     } else {
       t.removeAttribute('aria-current');
     }
@@ -26,9 +28,32 @@ function showPanel() {
 }
 window.addEventListener('hashchange', () => {
   showPanel();
-  window.scrollTo({ top: 0 });
+  // 右の「もっと見る」などから切り替えたとき、タブの枠が画面外なら見える位置まで移動する
+  const box = document.getElementById('topics');
+  const top = box.getBoundingClientRect().top;
+  if (top < 0 || top > window.innerHeight * 0.6) box.scrollIntoView({ block: 'start' });
 });
 showPanel();
+
+// ---- 「もっと見る」（先頭の数件だけ見せている一覧を開閉する） ----
+function updateMoreButtons() {
+  document.querySelectorAll('.clip').forEach((clip) => {
+    const open = clip.classList.contains('open');
+    const btn = clip.nextElementSibling;
+    // 画面幅によって絞る件数が変わるので、実際に隠れている記事があるかで判断する
+    const hidden = [...clip.querySelectorAll('.news-list > li')].some((li) => getComputedStyle(li).display === 'none');
+    btn.classList.toggle('show', open || hidden);
+    btn.textContent = open ? '閉じる' : 'もっと見る';
+  });
+}
+window.matchMedia('(max-width: 767px)').addEventListener('change', updateMoreButtons);
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-more]');
+  if (!btn) return;
+  btn.previousElementSibling.classList.toggle('open');
+  updateMoreButtons();
+});
+updateMoreButtons();
 
 // ---- 「15分前」などの相対時刻 ----
 function updateRelativeTimes() {
@@ -76,6 +101,7 @@ async function refreshBreaking() {
     });
     atEl?.setAttribute('datetime', new Date(data.at).toISOString());
     updateRelativeTimes();
+    updateMoreButtons();
   } catch {
     // 取得できなければ表示中の内容のまま
   }

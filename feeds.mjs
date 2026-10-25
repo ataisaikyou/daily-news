@@ -28,12 +28,14 @@ export const breaking = {
   ],
 };
 
+// short: 中央のタブに出す短い名前（省略時は name）
 // x: 「Xで検索」リンクの検索語
 // major: true のフィードは「昨日／今日の主なニュース」として日付ごとに蓄積する
 export const categories = [
   {
     id: 'domestic',
     name: '主要・国内',
+    short: '主要',
     x: 'filter:news lang:ja',
     feeds: [
       { name: 'NHK', url: 'https://www.nhk.or.jp/rss/news/cat0.xml', major: true },
@@ -55,6 +57,7 @@ export const categories = [
   {
     id: 'tech',
     name: 'IT・テクノロジー',
+    short: 'IT',
     x: '(IT OR AI OR テクノロジー) filter:news lang:ja',
     feeds: [
       { name: 'ITmedia', url: 'https://rss.itmedia.co.jp/rss/2.0/itmedia_all.xml' },

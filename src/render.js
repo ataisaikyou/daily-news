@@ -14,16 +14,20 @@ export function formatJst(ms) {
   return jstFormat.format(new Date(ms));
 }
 
+const NEW_WITHIN = 60 * 60 * 1000; // この時間以内の記事に「NEW」を付ける
+
 // ニュース一覧。abs: true のときは「○分前」に変えず日時のまま出す
 export function newsList(items, { abs = false } = {}) {
   if (!items?.length) return '<p class="empty">該当する記事はまだありません</p>';
+  const now = Date.now();
   return `<ul class="news-list">${items.map((it) => {
     const time = it.time
       ? ` ・ <time${abs ? '' : ' data-rel'} datetime="${new Date(it.time).toISOString()}">${formatJst(it.time)}</time>`
       : '';
     const flash = it.title.includes('速報') ? '<span class="flash-tag">速報</span>' : '';
+    const isNew = it.time && now - it.time < NEW_WITHIN ? '<span class="new">NEW</span>' : '';
     return `
-  <li>${flash}<a href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${escapeHtml(it.title)}</a>
+  <li><a href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${flash}${escapeHtml(it.title)}</a>${isNew}
     <span class="meta">${escapeHtml(it.source)}${time}</span></li>`;
   }).join('')}
 </ul>`;
