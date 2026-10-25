@@ -35,6 +35,8 @@ const DEFAULT_TAB = 'domestic';
 function showPanel() {
   const want = location.hash.slice(1) || DEFAULT_TAB;
   const id = document.querySelector(`[data-panel="${CSS.escape(want)}"]`) ? want : DEFAULT_TAB;
+  // 「今日・昨日」タブでは並び替えボタンを隠す（CSS で使う）
+  document.getElementById('topics').dataset.active = id;
   document.querySelectorAll('[data-panel]').forEach((p) => p.classList.toggle('active', p.dataset.panel === id));
   document.querySelectorAll('[data-tab]').forEach((t) => {
     if (t.dataset.tab === id) {
@@ -75,6 +77,24 @@ document.addEventListener('click', (e) => {
   updateMoreButtons();
 });
 updateMoreButtons();
+
+// ---- 並び替え（新しい順／人気順。全タブ共通で、選んだ方をこの端末に覚える） ----
+const SORTS = ['new', 'popular'];
+function applySort(sort) {
+  document.querySelectorAll('[data-sort]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sort === sort)));
+  document.querySelectorAll('[data-view]').forEach((v) => { v.hidden = v.dataset.view !== sort; });
+  updateMoreButtons();
+}
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-sort]');
+  if (!btn) return;
+  applySort(btn.dataset.sort);
+  // 保存できない環境（プライベートモード等）でも並び替え自体は効くので、保存の失敗は無視する
+  try { localStorage.setItem('sort', btn.dataset.sort); } catch {}
+});
+let savedSort = null;
+try { savedSort = localStorage.getItem('sort'); } catch {}
+applySort(SORTS.includes(savedSort) ? savedSort : 'new');
 
 // ---- 「15分前」などの相対時刻 ----
 function updateRelativeTimes() {

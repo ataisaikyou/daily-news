@@ -205,10 +205,38 @@ body {
   margin-bottom: -1px;
   border-bottom: 1px solid var(--surface);
 }
-.topics-meta { margin: 8px 12px 0; color: var(--muted); font-size: .75rem; }
+.topics-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 12px 0;
+  color: var(--muted);
+  font-size: .75rem;
+}
+/* 並び替えボタン（JSが動くときだけ出す。「今日・昨日」タブでは隠す） */
+.sort { display: none; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.js .sort { display: flex; }
+.js .topics[data-active="daily"] .sort { display: none; }
+.sort button {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: .8rem;
+  cursor: pointer;
+}
+.sort button + button { border-left: 1px solid var(--border); }
+.sort button:hover { color: var(--accent); }
+.sort button[aria-pressed="true"] { background: var(--btn); color: var(--on-btn); font-weight: 700; }
 .panel { padding-top: 2px; }
 .js .panel:not(.active) { display: none; }
-.panel > .clip, .panel > .note, .panel > .sub { margin-left: 12px; margin-right: 12px; }
+.panel > .clip, .panel > .note, .panel > .sub,
+.sort-view > .clip, .sort-view > .note { margin-left: 12px; margin-right: 12px; }
+.pop { color: var(--accent); font-weight: 700; }
 
 /* ---- ニュース一覧 ---- */
 .news-list { list-style: none; margin: 0; padding: 0; }

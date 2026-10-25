@@ -5,6 +5,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { appendFile, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { breaking, categories, NEWS_INTERVAL_MIN, quakeApi, SITE_URL, TRIGGER_URL } from '../feeds.mjs';
 import { escapeHtml, formatJst, newsList, renderQuakes } from '../src/render.js';
+import { countSources, fetchBookmarks, POPULAR_HOURS, popularOrder } from './popularity.mjs';
 
 const ROOT = new URL('../', import.meta.url);
 const DIST = new URL('dist/', ROOT);
@@ -203,11 +204,20 @@ function breakingBox(state) {
 </section>`;
 }
 
-// ---- 中央：ジャンル別のタブ ----
-function topicPanel(cat) {
+// ---- 中央：ジャンル別のタブ（新しい順と人気順の両方を出しておき、ボタンで切り替える） ----
+function topicPanel(cat, now) {
+  const foot = (n) => `<p class="box-foot"><span class="count">${n}件</span>${xLink(cat.x, `Xで「${cat.name}」を検索`)}</p>`;
+  const popular = popularOrder(cat.items, now);
   return `<div class="panel" data-panel="${cat.id}">
-  ${clipList(newsList(cat.items), 10)}
-  <p class="box-foot"><span class="count">${cat.items.length}件</span>${xLink(cat.x, `Xで「${cat.name}」を検索`)}</p>
+  <div class="sort-view" data-view="new">
+    ${clipList(newsList(cat.items), 10)}
+    ${foot(cat.items.length)}
+  </div>
+  <div class="sort-view" data-view="popular" hidden>
+    <p class="note">${POPULAR_HOURS}時間以内の記事を、はてなブックマーク数と同じ話題を報じた媒体の数で並べています</p>
+    ${clipList(newsList(popular, { pop: true }), 10)}
+    ${foot(popular.length)}
+  </div>
 </div>`;
 }
 
@@ -227,8 +237,14 @@ function topicsBox(cats, days, state, now) {
   return `<section class="box topics" id="topics">
   <nav class="topic-tabs">${tabs.map((t) =>
     `<a href="#${t.id}" data-tab="${t.id}">${escapeHtml(t.name)}</a>`).join('')}</nav>
-  <p class="topics-meta">${formatJst(state.newsAt)} 更新</p>
-  ${cats.map(topicPanel).join('\n')}
+  <div class="topics-meta">
+    <span>${formatJst(state.newsAt)} 更新</span>
+    <div class="sort" role="group" aria-label="並び替え">
+      <button type="button" data-sort="new" aria-pressed="true">新しい順</button>
+      <button type="button" data-sort="popular" aria-pressed="false">人気順</button>
+    </div>
+  </div>
+  ${cats.map((c) => topicPanel(c, now)).join('\n')}
   ${dailyPanel(days, now)}
 </section>`;
 }
@@ -346,9 +362,25 @@ const yesterdayStart = jstDayStart(now) - DAY;
 const major = uniqueSorted([...(fresh?.major ?? []), ...(prev?.major ?? [])])
   .filter((it) => it.time && it.time >= yesterdayStart && it.time <= now + 600e3);
 
+// 人気順の注目度（はてなブックマーク数・同じ話題を報じた媒体数）は毎回数え直す
+const baseCats = fresh?.categories ?? categories.map((c) => ({ id: c.id, items: prevCats.get(c.id) }));
+const recent = (it) => it.time && now - it.time <= POPULAR_HOURS * 3600e3;
+const recentItems = baseCats.flatMap((c) => c.items).filter(recent);
+const prevHb = new Map(baseCats.flatMap((c) => c.items).filter((it) => it.hb != null).map((it) => [it.link, it.hb]));
+const bookmarks = await fetchBookmarks(recentItems.map((it) => it.link), prevHb, UA);
+const pool = [...recentItems, ...breakingItems.filter(recent)];
+const scoredCats = baseCats.map((c) => {
+  const src = countSources(c.items, pool);
+  return {
+    id: c.id,
+    items: c.items.map(({ hb, src: _, ...it }, i) =>
+      recent(it) ? { ...it, hb: bookmarks.get(it.link) ?? hb ?? 0, src: src[i] } : it),
+  };
+});
+
 const state = {
   newsAt: fullDue ? updatedAt : prev.newsAt,
-  categories: fresh?.categories ?? categories.map((c) => ({ id: c.id, items: prevCats.get(c.id) })),
+  categories: scoredCats,
   breaking: { at: updatedAt, items: breakingItems },
   quakes,
   major,

@@ -16,8 +16,16 @@ export function formatJst(ms) {
 
 const NEW_WITHIN = 60 * 60 * 1000; // この時間以内の記事に「NEW」を付ける
 
-// ニュース一覧。abs: true のときは「○分前」に変えず日時のまま出す
-export function newsList(items, { abs = false } = {}) {
+// 人気順で出す注目度（はてなブックマーク数・同じ話題を報じた媒体数）
+function popBadges(it) {
+  const parts = [];
+  if (it.hb > 0) parts.push(`<span class="pop" title="はてなブックマーク数">B! ${it.hb}</span>`);
+  if (it.src > 1) parts.push(`<span class="pop" title="同じ話題を報じた媒体の数">${it.src}社が報道</span>`);
+  return parts.length ? ` ・ ${parts.join(' ・ ')}` : '';
+}
+
+// ニュース一覧。abs: true のときは「○分前」に変えず日時のまま出す。pop: true のときは注目度も出す
+export function newsList(items, { abs = false, pop = false } = {}) {
   if (!items?.length) return '<p class="empty">該当する記事はまだありません</p>';
   const now = Date.now();
   return `<ul class="news-list">${items.map((it) => {
@@ -28,7 +36,7 @@ export function newsList(items, { abs = false } = {}) {
     const isNew = it.time && now - it.time < NEW_WITHIN ? '<span class="new">NEW</span>' : '';
     return `
   <li><a href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${flash}${escapeHtml(it.title)}</a>${isNew}
-    <span class="meta">${escapeHtml(it.source)}${time}</span></li>`;
+    <span class="meta">${escapeHtml(it.source)}${time}${pop ? popBadges(it) : ''}</span></li>`;
   }).join('')}
 </ul>`;
 }
