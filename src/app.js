@@ -9,6 +9,27 @@ const loadedAt = Date.now();
 
 document.documentElement.classList.add('js');
 
+// ---- ライト／ダークの切り替え（選んだ方をこの端末に覚える。未選択なら端末の設定に従う） ----
+const themeBtn = document.querySelector('[data-theme-toggle]');
+const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+const currentTheme = () => document.documentElement.dataset.theme || (darkMq.matches ? 'dark' : 'light');
+function updateThemeBtn() {
+  const dark = currentTheme() === 'dark';
+  themeBtn.textContent = dark ? '☀️ ライト' : '🌙 ダーク';
+  themeBtn.setAttribute('aria-label', dark ? 'ライトモードに切り替え' : 'ダークモードに切り替え');
+}
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    // 保存できない環境（プライベートモード等）でも切り替え自体は効くので、保存の失敗は無視する
+    try { localStorage.setItem('theme', next); } catch {}
+    updateThemeBtn();
+  });
+  darkMq.addEventListener('change', updateThemeBtn);
+  updateThemeBtn();
+}
+
 // ---- 中央のタブ切り替え（URLの #world などで表示するジャンルを決める。初期は「主要」） ----
 const DEFAULT_TAB = 'domestic';
 function showPanel() {

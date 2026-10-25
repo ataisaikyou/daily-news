@@ -3,3 +3,4 @@ dist/
 # Cloudflare Worker の手元実行用（秘密情報を含むのでコミットしない）
 .dev.vars
 .wrangler/
+screenshots/

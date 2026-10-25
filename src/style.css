@@ -18,8 +18,9 @@
   color-scheme: light;
 }
 
+/* ダーク：端末がダーク設定（ライトを選んだ場合を除く）か、ダークを選んだとき */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #121418;
     --surface: #1a1d23;
     --text: #e6e8ec;
@@ -38,6 +39,24 @@
     color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #121418;
+  --surface: #1a1d23;
+  --text: #e6e8ec;
+  --muted: #9aa1ad;
+  --link: #e6e8ec;
+  --link-hover: #ff7b7b;
+  --accent: #8fb0ff;
+  --border: #353c4a;
+  --line: #2a2f3a;
+  --box-head: #212632;
+  --tab-bg: #1f232b;
+  --new: #f0a92e;
+  --flash: #ff5c5c;
+  --btn: #5b86f0;
+  --on-btn: #ffffff;
+  color-scheme: dark;
+}
 
 * { box-sizing: border-box; }
 
@@ -51,7 +70,8 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-.wrap { max-width: 1000px; margin: 0 auto; padding: 0 16px; }
+/* 画面の横幅いっぱいに使う */
+.wrap { padding: 0 16px; }
 
 /* ---- 上部（タイトル・更新時刻・更新ボタン） ---- */
 .topbar { padding: 14px 0 12px; }
@@ -69,6 +89,21 @@ body {
 .top-meta p { margin: 0; }
 .date { font-weight: 700; }
 .updated { color: var(--muted); font-size: .8rem; }
+.top-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.theme-btn {
+  display: none; /* JSが動くときだけ出す */
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.js .theme-btn { display: block; }
+.theme-btn:hover { border-color: var(--accent); color: var(--accent); }
 .refresh-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .refresh {
   min-height: 40px;
@@ -88,7 +123,8 @@ body {
 /* ---- 3段組み：左 速報 / 中央 タブ / 右 X・災害 ---- */
 .layout {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr) 300px;
+  /* 画面幅に合わせて広がる（左右の列：中央 ≒ 1 : 2.2） */
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 2.2fr) minmax(300px, 1fr);
   grid-template-areas: "left main right";
   gap: 14px;
   align-items: start;
@@ -100,7 +136,7 @@ body {
 /* タブレット：右列を中央の下へ */
 @media (max-width: 1023px) {
   .layout {
-    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr);
     grid-template-areas: "left main" "left right";
   }
 }

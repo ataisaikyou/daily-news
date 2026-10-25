@@ -272,6 +272,10 @@ function page(cats, state, days, now) {
 <meta name="robots" content="noindex, nofollow">
 <title>今日のニュース</title>
 <link rel="icon" href="data:image/svg+xml,${icon}">
+<script>
+  // 前回選んだライト／ダークを描画前に反映する（ちらつき防止。保存がなければ端末の設定に従う）
+  try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
+</script>
 <link rel="stylesheet" href="style.css?v=${now}">
 </head>
 <body>
@@ -283,8 +287,11 @@ function page(cats, state, days, now) {
       <p class="updated">ニュース <time data-rel datetime="${iso(state.newsAt)}">${formatJst(state.newsAt)}</time> 更新（${NEWS_INTERVAL_MIN}分ごと）
         ・ 速報 <time data-rel data-breaking-at datetime="${iso(state.breaking.at)}">${formatJst(state.breaking.at)}</time> 更新（5分ごと）</p>
     </div>
-    ${TRIGGER ? `<div class="refresh-box"><button type="button" class="refresh" data-refresh="${escapeHtml(TRIGGER)}">今すぐ更新</button>
-      <span class="refresh-msg" data-refresh-msg aria-live="polite"></span></div>` : ''}
+    <div class="top-actions">
+      <button type="button" class="theme-btn" data-theme-toggle>ダーク</button>
+      ${TRIGGER ? `<div class="refresh-box"><button type="button" class="refresh" data-refresh="${escapeHtml(TRIGGER)}">今すぐ更新</button>
+        <span class="refresh-msg" data-refresh-msg aria-live="polite"></span></div>` : ''}
+    </div>
   </div>
 </header>
 <div class="wrap layout">
